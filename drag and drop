@@ -1,0 +1,1570 @@
+import React, { useState,useEffect } from 'react';
+import { Alert, Avatar, Backdrop, Box, Button, 
+    Checkbox, 
+    CircularProgress, Divider, Grid, InputAdornment,
+      Menu, MenuItem, Modal,
+      Snackbar, TextField, Tooltip, Typography } from '@mui/material'
+import SearchIcon from '@mui/icons-material/Search';
+import DragHandleIcon from '@mui/icons-material/DragHandle';
+import { DragDropContext, Draggable, Droppable } from 'react-beautiful-dnd';
+import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
+import TreeView from '@mui/lab/TreeView';
+import TreeItem from '@mui/lab/TreeItem';
+import { makeStyles } from '@material-ui/core';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import dayjs from 'dayjs';
+import { useAuthenticator } from "@aws-amplify/ui-react";
+import ArrowDropUpIcon from '@mui/icons-material/ArrowDropUp';
+import DoneAllIcon from '@mui/icons-material/DoneAll';
+import ClearIcon from '@mui/icons-material/Clear';
+import BacklogDrawer from './BacklogDrawer';
+import CreateOrEditIssueOrFlowitemModal from "./CreateOrEditIssueOrFlowitemModal";
+import BackendService from '../../../service/BackendService';
+
+function Backlog({location,tableData,getIteration}) {
+    
+    const classes = useStyles();
+    const {user}=useAuthenticator();
+
+    const [flowitemIterationId,setFlowitemIterationId]=useState();
+    const [iterationDataForCreateIssue,setIterationDataForCreateIssue]=useState([]);
+
+    const [searchValue,setSearchValue]=useState("");
+    const [flowItem,setFlowItem]=useState(false);
+    const [issue,setIssue]=useState(false);
+    const [updateData,setUpdateData]=useState(null);
+    const [managerList,setManagerList]=useState([]);
+
+    const [anchorEl, setAnchorEl] = useState(null);
+    const [anchorEll, setAnchorEll] = useState(null);
+    const openAnch = Boolean(anchorEl);
+    const openAnchh = Boolean(anchorEll);
+    const [loading, setLoading] = useState();
+    const [isDragging,setIsDragging]=useState(false);
+
+    const [open, setOpen] = useState(false);
+    const [flowitemModal,setFlowitemModal]=useState(false);
+    const [issueModal,setIssueModal]=useState(false);
+    const [drawerModal,setDrawerModal]=useState(false);
+    const [CompleteIterationModal,setCompleteIterationModal]=useState(false);
+
+    const [submitLoad, setSubmitLoad] = useState(false);
+    const [backDrop, setBackDrop] = useState(false);
+    const [notification, setNotification] = useState(null);
+    const [openNotification, setOpenNotification] = useState(false);
+    const [notificationSeverity, setNotificationSeverity] = useState('');
+    const [backDropForBacklogDragAndDrop,setBackDropForBacklogDragAndDrop]=useState(false);
+
+    const [backlogData,setBacklogdata]=useState([]);
+    const [backlogDataForDnD,setBacklogdataForDnD]=useState([]);
+    const [flowitemDataForDrawer,setFlowitemDataForDrawer]=useState([]);
+    const [iterationData,setIterationData]=useState([]);
+    const [iterationDataForDnD,setIterationDataForDnd]=useState([]);
+    const [iterationIdForCompleteiteration,setIterationIdForCompleteiteration]=useState("");
+    
+useEffect(()=>{
+        
+        getData();
+        getIteration.current=getData;
+    },[searchValue]);
+
+    const getAllData=()=>{
+        const milestoneData={
+            milestoneId:location.usr.usr?.id,
+            status:"All",
+            searchText:searchValue.trim()
+        }
+
+        BackendService.getAllIterationForMilestone(milestoneData).then(res=>{
+            // console.log(res.data.data,"resiteration");
+            setIterationData(res.data.data?.filter(data=>{
+                        if(data?.status!=="Completed"){
+                            return data;
+                        }
+                    }));
+            setIterationDataForDnd(res.data.data?.filter(data=>{
+                        if(data?.status!=="Completed"){
+                            return data;
+                        }
+                    }));
+            // setLoading(false);
+            // return res.data.data;
+        }).catch(error=>
+            {
+                console.log(error,"err")
+            }).then(()=>{
+                BackendService.getAllFlowitemForBacklog(location.usr.usr.id).then(res=>{
+                    // console.log(res.data.data,"resbacklog");
+                    setBacklogdata(res.data.data?.filter(data=>{
+                        if(data?.status!=="Completed"){
+                            return data;
+                        }
+                    }));
+                    setBacklogdataForDnD(res.data.data?.filter(data=>{
+                        if(data?.status!=="Completed"){
+                            return data;
+                        }
+                    }));
+                    setLoading(false);
+                    setBackDropForBacklogDragAndDrop(false);
+                    setBackDrop(false);
+                }).catch(err=>{
+                    console.log(err,"err");
+                    setBackDrop(false);
+                });
+            });
+    }
+    
+    const getData=()=>{
+        // console.log("called")
+        setBackDrop(true);
+        setIterationData([]);
+
+        getAllData();
+    }
+
+
+    const searchItem=(e)=>{
+        // setTableData([])
+        if(e.target.value!==""){
+            // setPage();
+                setSearchValue(e.target.value);
+            
+        }else{
+            // setPage(1);
+            setSearchValue("");
+            // setCurrentPage(1);
+        }
+    };
+
+    const handleCloseCompleteIteration=()=>{
+        setCompleteIterationModal(false);
+        setIterationIdForCompleteiteration();
+    }
+
+    const handleCompleteIteration=(id)=>{
+        // console.log(id,"completeid");
+        setIterationIdForCompleteiteration(id);
+        setCompleteIterationModal(true);
+    }
+
+    const completeIteration=()=>{
+        setBackDrop(true);
+        setSubmitLoad(true);
+        setCompleteIterationModal(false);
+        BackendService.completeIteration(iterationIdForCompleteiteration).then(res=>{
+            // console.log(res,"completeiterationres");
+            setOpenNotification(true);
+            setNotificationSeverity('success');
+            setNotification('Iteration completed successfully');
+            setTimeout(() => {
+                // setLoading(true);
+                getAllData();
+                handleCloseCompleteIteration();
+                setSubmitLoad(false);
+                // setBackDrop(false);
+            }, 1000);
+        }).catch(err=>{
+            setOpenNotification(true);
+            setNotificationSeverity('error');
+            setNotification('Failed');
+            // console.log(err,"completeIterationError");
+            setBackDrop(false);
+        })
+    }
+
+    const handleCompleteIssue=(data)=>{
+        // console.log(data,"from drawer");
+        setDrawerModal(false);
+        setBackDrop(true);
+        setFlowitemModal(false);
+        setIssueModal(false);
+        setFlowitemDataForDrawer([]);
+        setUpdateData([]);
+        BackendService.editIssue(data).then(res=>{
+            // console.log(res,"IssuecompleteRes");
+            setOpenNotification(true);
+            setNotificationSeverity('success');
+            setNotification('Issue completed successfully');
+            setTimeout(() => {
+                setSubmitLoad(false);
+                // setBackDrop(false);
+                getAllData();
+            }, 1000);
+        }).catch(err=>{
+            // console.log(err,"edit err");
+            setOpenNotification(true);
+            setSubmitLoad(false);
+            setBackDrop(false);
+            setNotificationSeverity('error');
+            setNotification('Failed');
+            closedrawer();
+        });
+    }
+
+    const handleCompleteFlowitem=(data)=>{
+        setDrawerModal(false);
+        setBackDrop(true);
+        setFlowitemModal(false);
+        setIssueModal(false);
+        setFlowitemDataForDrawer([]);
+        setUpdateData([]);
+        // console.log(data,"flowitemComplete")
+        BackendService.editFlowitem(data).then(res=>{
+            // console.log(res,"edit");
+            setOpenNotification(true);
+            setNotificationSeverity('success');
+            setNotification('Flowitem completed successfully');
+            setAnchorEl(null);
+            setTimeout(() => {
+                // setBackDrop(false);
+                getAllData();
+                // drawerClose();
+            }, 1000);
+        }).catch(err=>{
+            // console.log(err,"flowitemcomplete err");
+            setOpenNotification(true);
+            setSubmitLoad(false);
+            setBackDrop(false);
+            setNotificationSeverity('error');
+            setNotification('Failed flowitem cannot be completed without completing issues');
+            closedrawer();
+        });
+    }
+
+    const handleDeleteFlowitem=(flowitemId)=>{
+        setDrawerModal(false);
+        setBackDrop(true);
+        setFlowitemModal(false);
+        setIssueModal(false);
+        setFlowitemDataForDrawer([]);
+        setUpdateData([]);
+        BackendService.deleteFlowitem(flowitemId).then(res=>{
+            setOpenNotification(true);
+            setNotificationSeverity('success');
+            setNotification('Flowitem deleted successfully');
+            setTimeout(()=>{
+                setSubmitLoad(false);
+                // setBackDrop(false);
+                getAllData();
+            },1000)
+        }).catch(err=>{
+            setOpenNotification(true);
+            setSubmitLoad(false);
+            setBackDrop(false);
+            setNotificationSeverity('error');
+            setNotification('Failed');
+            closedrawer();
+        })
+    }
+
+    const handleDeleteIssue=(issueId)=>{
+        setDrawerModal(false);
+        setBackDrop(true);
+        setFlowitemModal(false);
+        setIssueModal(false);
+        setFlowitemDataForDrawer([]);
+        setUpdateData([]);
+        BackendService.deleteIssue(issueId).then(res=>{
+            setOpenNotification(true);
+            setNotificationSeverity('success');
+            setNotification('Issue deleted successfully');
+            setTimeout(()=>{
+                setSubmitLoad(false);
+                // setBackDrop(false);
+                getAllData();
+            },1000)
+        }).catch(err=>{
+            setOpenNotification(true);
+            setSubmitLoad(false);
+            setBackDrop(false);
+            setNotificationSeverity('error');
+            setNotification('Failed');
+            closedrawer();
+        })
+    }
+
+    const handleCreateClick=(event,id)=>{
+        setAnchorEl(event.currentTarget);
+        setFlowitemIterationId(id);
+        GetIterationIdForCreatingIssue(id)
+        // setCurrentIndex(index);
+        BackendService.getAllUsers().then(res=>{
+            // console.log(res.data,"managerlist")
+            const users=res.data.users.map(data=>data.Attributes);
+            const managers=users.map(data=>{
+                return data.map(value=>{
+                    return value.Value;
+                })
+            });
+            setManagerList(managers);
+            // setCreatedBy(updateData == null ? '' : updateData?.createdBy)
+        });
+    }
+
+    const handleCreateFlowitem=(flowitemData)=>{
+        setDrawerModal(false);
+        setBackDrop(true);
+        setFlowitemModal(false);
+        setIssueModal(false);
+        setOpen(false);
+        setFlowitemDataForDrawer([]);
+        setUpdateData([]);
+        BackendService.createFlowItem(flowitemData).then(res=>{
+            // setBackDrop(false);
+            setOpenNotification(true);
+            setNotificationSeverity('success');
+            setNotification('Flowitem created successfully');
+            setTimeout(() => {
+                cancelClose();
+                setSubmitLoad(false);
+                getAllData();
+            }, 1000);
+        }).catch(err=>{
+            setBackDrop(false);
+            setOpenNotification(true);
+            setNotificationSeverity('error');
+            setNotification('Failed');
+            setSubmitLoad(false);
+            // console.log(err,"createFlowitemfailed")
+        })
+    }
+
+    const handleCreateIssue=(issueData)=>{
+        setDrawerModal(false);
+        setBackDrop(true);
+        setFlowitemModal(false);
+        setIssueModal(false);
+        setOpen(false);
+        setFlowitemDataForDrawer([]);
+        setUpdateData([]);
+        BackendService.createIssue(issueData).then(res=>{
+            // console.log(res,"CreateIssueRes");
+            // setBackDrop(false);
+            setOpenNotification(true);
+            setNotificationSeverity('success');
+            setNotification('Issue created successfully');
+            setTimeout(() => {
+                cancelClose();
+                setSubmitLoad(false);
+                getAllData();
+            }, 1000);
+        }).catch(err=>{
+            // console.log(err,"create issue err");
+            setOpenNotification(true);
+            setSubmitLoad(false);
+            setBackDrop(false);
+            setNotificationSeverity('error');
+            setNotification('Failed');
+        });
+    }
+
+    const handleEditIssue=(issueData)=>{
+        setDrawerModal(false);
+        setBackDrop(true);
+        setFlowitemModal(false);
+        setIssueModal(false);
+        setFlowitemDataForDrawer([]);
+        setUpdateData([]);
+        setOpen(false);
+        BackendService.editIssue(issueData).then(res=>{
+            // console.log(res,"editRes");
+            // setBackDrop(false);
+            setOpenNotification(true);
+            setNotificationSeverity('success');
+            setNotification('Issue edited successfully');
+            setTimeout(() => {
+                getAllData();
+                cancelClose();
+                setSubmitLoad(false);
+            }, 1000);
+        }).catch(err=>{
+            // console.log(err,"edit err");
+            setOpenNotification(true);
+            setSubmitLoad(false);
+            setBackDrop(false);
+            setNotificationSeverity('error');
+            setNotification('Failed');
+        });
+    }
+
+    const handleEditFlowitem=(flowitemData)=>{
+        setDrawerModal(false);
+        setBackDrop(true);
+        setFlowitemModal(false);
+        setIssueModal(false);
+        setOpen(false);
+        setFlowitemDataForDrawer([]);
+        setUpdateData([]);
+        BackendService.editFlowitem(flowitemData).then(res=>{
+            // console.log(res,"editRes");
+            // setBackDrop(false);
+            setOpenNotification(true);
+            setNotificationSeverity('success');
+            setNotification('Flowitem edited successfully');
+            setTimeout(() => {
+                cancelClose();
+                setSubmitLoad(false);
+                getAllData();
+            }, 1000);
+        }).catch(err=>{
+            // console.log(err,"edit err");
+            setOpenNotification(true);
+            setSubmitLoad(false);
+            setBackDrop(false);
+            setNotificationSeverity('error');
+            setNotification('Failed');
+        });
+    }
+
+
+    const handleEditClose= () => {
+        setFlowitemIterationId();
+        GetIterationIdForCreatingIssue()
+        setAnchorEl(null);
+        setAnchorEll(null);
+    };
+
+    const handleClose=()=>{
+        setOpen(false);
+        setAnchorEl(null);
+        setAnchorEll(null);
+        setFlowItem(false);
+        setFlowitemIterationId();
+        setIssue(false);
+        getAllData();
+    }
+
+    const cancelClose=()=>{
+        setOpen(false);
+        setAnchorEl(null);
+        setAnchorEll(null);
+        setFlowItem(false);
+        setFlowitemIterationId();
+        setIssue(false);
+        // getData();
+        
+    }
+
+    const handleFlowItemdrawer=(flowItem,iteration)=>{
+        // console.log(flowItem,iteration,"iterationfordrawer");
+        setFlowitemDataForDrawer(flowItem);
+        setUpdateData(iteration);
+        setDrawerModal(true);
+        setFlowitemModal(true);
+        setIssueModal(false);
+    }
+
+    const handleFlowItemBacklogdrawer=(flowItem)=>{
+        // console.log(flowItem,"iterationfordrawer");
+        setFlowitemDataForDrawer(flowItem);
+        // setUpdateData(iteration);
+        setDrawerModal(true);
+        setFlowitemModal(true);
+        setIssueModal(false);
+    }
+
+    const handleIssuedrawer=(issue,iteration)=>{
+        // console.log(issue,"issuefordrawer")
+        setFlowitemDataForDrawer(issue);
+        setUpdateData(iteration);
+        setDrawerModal(true);
+        setIssueModal(true);
+        setFlowitemModal(false);
+    }
+
+    const handleIssueBacklogdrawer=(issue)=>{
+        // console.log(issue,"iterationfordrawer");
+        setFlowitemDataForDrawer(issue);
+        // setUpdateData(iteration);
+        setDrawerModal(true);
+        setFlowitemModal(false);
+        setIssueModal(true);
+    }
+
+    const dragStartIteration=(e,i,data)=>{
+        e.stopPropagation();
+        // console.log(data,"startdraggingdata");
+        e.dataTransfer.setData("iterationdata",JSON.stringify(data) );
+
+        setTimeout(()=>{
+            setIterationData(iterationData.map(iteration=>{
+
+                if(iteration.id===data.iterationId){
+                  const changedFlowitem= iteration.flowitems.filter(flowitem=>{
+                        if(flowitem.id!==data.id){
+                            return flowitem;
+                        }
+                    });
+                    // console.log({...iteration,flowitems:changedFlowitem},"changedData")
+                    return {...iteration,flowitems:changedFlowitem}
+                }
+                    return iteration;
+
+            }));
+        },0);
+        // console.log(JSON.parse(e?.dataTransfer?.getData("iterationdata")),"settedData");
+        
+    }
+
+    const dragStartBacklog=(e,i,data)=>{
+        e.stopPropagation();
+        // console.log(data,"startdraggingdata")
+        e.dataTransfer.setData("backlogdata",JSON.stringify(data));
+        setTimeout(()=>{
+            setBacklogdata(backlogData.filter(backlog=>{
+                if(backlog.id!==data.id){
+                    return backlog;
+                }
+            }))
+        })
+    }
+
+    const dropIteration=(e,i,data)=>{
+        // console.log(iterationData,"dropiterationleave")
+        e.preventDefault();
+        e.stopPropagation();
+        // console.log(data,"data")
+        let droppedData= e.dataTransfer.getData("backlogdata")?JSON.parse(e.dataTransfer.getData("backlogdata")):
+                        JSON.parse(e?.dataTransfer?.getData("iterationdata"));
+        // console.log(droppedData,"droppeddata")
+        if(isDragging){
+            // console.log("success");
+            // console.log(droppedData,"dropped");
+                if(e.dataTransfer.types[0]==="iterationdata"||e.dataTransfer.types[0]==="backlogdata"){
+
+                    if(data.id!==droppedData?.iterationId){
+                    setTimeout(()=>{
+                        setIterationData(iterationData);
+                        setIterationDataForDnd(iterationData.filter(iteration=>{
+
+                            if(iteration.id===data.id){
+                               return {...iteration,flowitems:iteration.flowitems.unshift(droppedData)}
+                            }
+                                return iteration;
+                        }));
+                    },0);
+                    setBackDropForBacklogDragAndDrop(true);
+
+                    if(e.dataTransfer.types[0]==="backlogdata"){
+                        setBacklogdataForDnD(backlogData)
+                    }
+
+                }
+
+                else{
+                    setIterationData(iterationDataForDnD);
+                }}
+
+                BackendService.assignFlowItemToIterationMilestone(data.id,droppedData.id).then(res=>{
+                    // console.log(res,"draganddrop response");
+                }).catch(err=>{
+                    // console.log(err,"draganddrop error");
+                    setOpenNotification(true);
+                    setNotificationSeverity('failed');
+                    setNotification('Something went Wrong!');
+                }).then(()=>{
+                    getAllData();
+                });
+
+        }
+        else if(e.dataTransfer.types[0]==="iterationdata"&&!isDragging){
+            // console.log(false,"iterationdragged");
+            setIterationData(iterationDataForDnD);
+        }
+        else if(e.dataTransfer.types[0]==="backlogdata"&&!isDragging){
+            // console.log(false,"backlogdragged")
+            setBacklogdata(backlogDataForDnD);
+        }
+        else if(!isDragging){
+            // console.log(false,"iterationdragged");
+            setIterationData(iterationDataForDnD);
+            setBacklogdata(backlogDataForDnD);
+        }
+    }
+
+    const dropBacklog=(e,i,data)=>{
+        e.preventDefault();
+        e.stopPropagation();
+        //    setLoading(true);
+        if(isDragging){
+
+            if(e.dataTransfer.types[0]==="iterationdata"){
+            let droppedData= JSON.parse(e.dataTransfer?.getData("iterationdata"));
+            // console.log(droppedData,"dropped");
+            // setTimeout(()=>{
+                setBacklogdata(prevbacklog=>{
+                    return [droppedData,...prevbacklog]
+                });
+            // },0);
+            setBackDropForBacklogDragAndDrop(true);
+            setBacklogdataForDnD(prevbacklog=>{
+                return [droppedData,...prevbacklog]
+            });
+
+        BackendService.assignFlowItemToBacklog(droppedData.id).then(res=>{
+            // console.log(res,"draganddrop response")
+        }).catch(err=>{
+            // console.log(err,"draganddrop error");
+            setOpenNotification(true);
+                setNotificationSeverity('failed');
+                setNotification('Something went Wrong!');
+        }).then(()=>{
+            getAllData();
+        })
+       }
+
+       else{
+           setBacklogdata(backlogDataForDnD);
+       }
+    }
+    else if(e.dataTransfer.types[0]==="backlogdata"){
+        // console.log(false,"backlogdragged")
+        setBacklogdata(backlogDataForDnD);
+    }else if(!isDragging){
+        // console.log(false,"backlogdragged")
+        setBacklogdata(backlogDataForDnD);
+        setIterationData(iterationDataForDnD);
+    }
+
+    }
+
+    const dragEndIteration=(e)=>{
+        e.preventDefault();
+        e.stopPropagation();
+            // console.log(isDragging,"end");
+        // console.log(e?.dataTransfer?.getData("iterationdata"),"getteddata");
+        if(!isDragging){
+            setIterationData(iterationDataForDnD);
+            setBacklogdata(backlogDataForDnD);
+        }
+        // if(isDragging){
+        //     console.log("success");
+        //     console.log(e?.dataTransfer?.getData("iterationdata"),"data") 
+        // }else if(e.dataTransfer.types[0]==="iterationdata"&&!isDragging){
+        //     console.log(false,"iterationdragged")
+        //     setIterationData(iterationDataForDnD);
+        // }else if(e.dataTransfer.types[0]==="backlogdata"&&!isDragging){
+        //     console.log(false,"backlogdragged")
+        //     setBacklogdata(backlogDataForDnD);
+        // }else{
+        //     setIterationData(iterationDataForDnD);
+        // }
+    }
+
+    const dragEndBacklog=(e)=>{
+        e.preventDefault();
+        e.stopPropagation();
+        // if(isDragging){
+        //     console.log("successBacklog")
+        // }else if(e.dataTransfer.types[0]==="backlogdata"&&!isDragging){
+        //     setBacklogdata(backlogDataForDnD);
+        // }else{
+        //     setBacklogdata(backlogDataForDnD);
+        // }
+        if(!isDragging){
+            setIterationData(iterationDataForDnD);
+            setBacklogdata(backlogDataForDnD);
+        }
+    }
+
+    const dragLeaveBacklog=(e)=>{
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+        // if(e.dataTransfer.types[0]==="iterationdata"){
+        // }
+    }
+
+    const dragLeaveIteration=(e)=>{
+        e.preventDefault();
+        e.stopPropagation();
+        if(e.dataTransfer.types[0]==="backlogdata"){
+            setIsDragging(false);
+        }else if(e.dataTransfer.types[0]==="iterationdata"){
+            setIsDragging(false);
+        }
+    }
+
+    const dragOverIteration=(e)=>{
+        e.preventDefault();
+        e.stopPropagation();
+        if(e.dataTransfer.types[0]==="backlogdata"){
+            setIsDragging(true);
+        }else if(e.dataTransfer.types[0]==="iterationdata"){
+            setIsDragging(true);
+        }
+    }
+
+    const dragOverBacklog=(e)=>{
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(true);
+    }
+
+    const handleOnDragEnd=(result)=>{
+        console.log(result,"onend");
+        if (!result.destination){
+            setIterationData(iterationDataForDnD);
+            setBacklogdata(backlogDataForDnD);
+        }
+        // else if(result.destination==="backlog"{
+
+        // })
+
+    }
+
+    const handleOndragStart=(item)=>{
+        console.log(item,iterationData,"start");
+        setTimeout(()=>{
+            setIterationData(iterationData.map(iteration=>{
+                if(iteration.id===item?.source?.droppableId){
+                  const changedFlowitem= iteration.flowitems.filter(flowitem=>{
+                        if(flowitem.id!==item?.draggableId){
+                            return flowitem;
+                        }
+                    });
+                    // console.log({...iteration,flowitems:changedFlowitem},"changedData")
+                    return {...iteration,flowitems:changedFlowitem}
+                }
+                    return iteration;
+
+            }));
+        },0)
+    }
+
+    const closedrawer=()=>{
+        setDrawerModal(false);
+        setFlowitemModal(false);
+        setIssueModal(false);
+        setFlowitemDataForDrawer([]);
+        setUpdateData([]);
+    }
+
+    const capitalizeFirst = str => {
+        return str?.charAt(0).toUpperCase() + str?.slice(1);
+      };
+
+    const GetIterationIdForCreatingIssue=(id)=>{
+        if(id!==null){
+            // console.log(id,"createissue")
+          BackendService.createIssueGetIterationData(id).then(res=>{
+            //   console.log(res.data.data,"iterationDataForIssue");
+              setIterationDataForCreateIssue(res.data.data.filter(flowitemNames=>{
+                if(flowitemNames?.status!=="Completed"){
+                    return flowitemNames;
+                } 
+            }));
+          }).catch(err=>{
+              console.log(err,"err")
+          });
+        }else if(id===null){
+            // console.log(id,"backlog");
+            BackendService.createIssueGetIterationDataForBacklog(location.usr.usr?.id).then(res=>{
+                // console.log(res.data.data,"iterationDataForIssue");
+                setIterationDataForCreateIssue(res.data.data);
+            }).catch(err=>{
+                console.log(err,"err")
+            });
+    }
+        
+    }
+
+    return (
+        <div style={{paddingLeft: '25px',paddingRight:"25px"}}>
+            <Snackbar
+                    autoHideDuration={1000}
+                    anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+                    open={openNotification}
+                    onClose={() => setOpenNotification(null)}>
+                    <Alert
+                        onClose={() => setOpenNotification(null)}
+                        severity={notificationSeverity}
+                        className={
+                            notificationSeverity === 'success'
+                                ? classes.notificationSuccess
+                                : classes.notificationError
+                        }>
+                        {notification}
+                    </Alert>
+                </Snackbar>
+
+                <Backdrop
+                        sx={{ color: '#rgba(242, 242, 242, 1)', zIndex:27 }}
+                        open={backDrop||backDropForBacklogDragAndDrop}
+                        >
+                    <CircularProgress color="inherit" />
+                </Backdrop>
+
+                <Box style={{marginTop:"10px"}} onClick={closedrawer}>
+                <Grid  item sx={(theme)=>({width:"300px",
+                    [theme.breakpoints.down("xs")]:{
+                        width:"100px",
+                    }})}>
+                <TextField 
+                    margin="normal"
+                    variant="outlined"
+                    style={{paddingLeft: '0px',}}
+                    sx={(theme)=>({'& .MuiInputBase-input': {height: "37px",padding:"0",border:"0"},
+                    marginLeft:"0px",
+                    width:"280px",
+                    [theme.breakpoints.down("xs")]:{
+                        "& .css-454i4m-MuiFormControl-root-MuiTextField-root": {width:"100px" },
+                    }})}
+                    onChange={searchItem}
+                    value={searchValue}
+                    InputProps={{startAdornment:(
+                    <InputAdornment position="start" >
+                        <SearchIcon/>
+                    </InputAdornment>),
+                    endAdornment:(
+                        <InputAdornment position="end" >
+                            {searchValue!==""?<ClearIcon sx={{cursor:"pointer"}} onClick={()=>setSearchValue("")}/>:""}
+                        </InputAdornment>
+                    )
+                    }}
+                    placeholder="Search by Iteration Name"
+                    className={classes.searchField}
+                    />
+                </Grid >
+            </Box>
+            {loading ? (
+              <Grid className={classes.loading}  >
+              <CircularProgress
+              className={classes.circularProgress}
+              size={55}
+              />
+            </Grid>
+            ) :<>
+                <Menu 
+                     id="basic-menu"
+                     anchorEl={anchorEl}
+                     open={openAnch}
+                     onClose={handleEditClose}
+                     MenuListProps={{
+                         'aria-labelledby': 'basic-button',
+                     }}
+                                    
+                     anchorOrigin={{
+                         vertical: 'bottom',
+                         top:"0",
+                         horizontal: 'right',
+                     }}
+                     transformOrigin={{
+                         vertical: 'top',
+                         horizontal: 'right',
+                     }}
+                 >
+                     <MenuItem onClick={()=>{
+                         setOpen(true);
+                         setFlowItem(true);
+                         setAnchorEl(null);
+                     }} >FlowItem</MenuItem>
+                     <Divider />
+                     <MenuItem onClick={()=>{
+                         setOpen(true);
+                         setIssue(true);
+                         setAnchorEl(null);
+                     }} >Issue</MenuItem>
+                 </Menu>
+            <DragDropContext onDragEnd={handleOnDragEnd} onDragStart={handleOndragStart}>
+            {iterationData?.length!==0 ? iterationData?.map((iteration,i)=>{
+                return <Droppable droppableId={iteration?.id}>
+                     {(provided) => (
+                     <Grid onClick={closedrawer} key={iteration?.id} 
+                // draggable={false} 
+                // onDragOver={(e)=>{
+                //     e.preventDefault();
+                //     e.stopPropagation();
+                //     dragOverIteration(e);
+                // }} onDrop={(e)=>{
+                //     e.preventDefault();
+                //     e.stopPropagation();
+                //     dropIteration(e,i,iteration)
+                // }} onDragLeave={(e)=>{
+                //     e.stopPropagation();
+                //     dragLeaveIteration(e)
+                // }} onDragEnter={(e)=>{
+                //     e.stopPropagation();
+                //     dragOverIteration(e);
+                // }}
+                {...provided.droppableProps} ref={provided.innerRef}> 
+                <Grid container xs={12} onClick={closedrawer} style={{marginTop:"12px"}}>
+                    <Grid item xs={12}>
+                    <Typography className={classes.iterationName}>
+                        {capitalizeFirst(iteration?.name)}</Typography>
+                    <Typography className={classes.date} >
+                        {dayjs(iteration?.startDate).format("MMM D YYYY")}
+                        -{dayjs(iteration?.targetDate).format("MMM D YYYY")}
+                         ({dayjs(iteration?.targetDate).diff(dayjs(iteration?.startDate),"d")}days)
+                        </Typography>
+                    <Typography className={classes.iterationDescription}>
+                    {iteration?.description}
+                    </Typography>
+                </Grid>
+            </Grid>
+            {tableData?.status!=="Completed"&&iteration?.status!=="Completed"&&
+            <Grid onClick={closedrawer} key={i} style={{display:"flex",flexDirection:"row",justifyContent:"flex-end",alignItems:"center",
+                                            marginTop:"7px",marginBottom:"7px"}}  >
+                <Button variant="outlined"  className={classes.button} 
+                key={iterationData[i]?.id} onClick={()=>handleCompleteIteration(iterationData[i]?.id)}>Complete Iteration</Button>
+                <Button variant="text" 
+                     key={i} style={{color:'rgba(54, 64, 83, 1)',alignItems:"center",textAlign:"center",cursor:'pointer'}}
+                 onClick={(e)=>handleCreateClick(e,iteration?.id)}>
+                     + Create
+                     
+                     </Button>
+                </Grid>}
+                {/* tree view */}
+                <div>
+                {iteration?.flowitems?.length!==0 ?
+                <TreeView 
+                    aria-label="file system navigator"
+                    defaultCollapseIcon={<ExpandMoreIcon />}
+                    defaultExpandIcon={<ChevronRightIcon />}
+                    sx={{  maxWidth: "100%", overflowY: 'auto',overflowX: 'auto',marginBottom:"10px", }}
+                    onClick={(e)=>{
+                        e.stopPropagation();
+                        closedrawer();
+                    }}
+
+                    >
+                        {/* <Divider /> */}
+                        {iteration?.flowitems?.map((data,index)=>{
+                          return <Draggable key={data?.id} draggableId={data?.id} index={index}>
+                        {(provided) => (
+                         <Box 
+                        //   draggable onDragStart={(e)=>{
+                        //       dragStartIteration(e,index,data);
+                        //   }}  onDragEnd={(e)=>{
+                        //       e.preventDefault();
+                        //     e.stopPropagation();
+                        //     dragEndIteration(e);
+                        // }}
+                        ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}
+                          sx={{border: "thin solid #d7d7d7",borderBottom:"0",width:{xs:"800px",sm:"100%"}}} >
+                        <TreeItem  onClick={(e)=>{e.stopPropagation();
+                                                closedrawer()}} 
+                        onFocusCapture={e => e.stopPropagation()} 
+                         className={classes.TreeView} nodeId={data.id}  label={
+                            <Box onClick={(e)=>{e.stopPropagation();
+                                                closedrawer()}} >
+                        <Box onClick={(e)=>{e.stopPropagation();
+                                            closedrawer()}}
+                            style={{display:"flex",flexDirection:"row",alignItems:"center",justifyContent:"space-between",
+                            overflowX: 'auto',flexShrink:"0"}}>
+                            <Box style={{display:"flex",flexDirection:"row",justifyContent:"flex-start",alignItems:"center"}}>
+                            <Checkbox defaultChecked style={{color:"rgba(54, 64, 83, 1)",fontSize:"30px"}} size="small"/>
+                            <Typography><a onClick={(e)=>{ e.stopPropagation();
+                                handleFlowItemdrawer(iteration?.flowitems[index],iteration);}}
+                            style={{
+                            color: 'rgb(28, 117, 188)',
+                            textDecoration: 'none',
+                            }}>{capitalizeFirst(data?.name)}</a>
+                            </Typography>
+                            </Box>
+
+                            <Box style={{display:"flex",flexDirection:"row",justifyContent:"flex-end",alignItems:"center"}}>
+                            
+                            <Typography className={classes.estimate}>
+                                            {data?.estimate===""?"-":data?.estimate===null?"-":`${data?.estimate}h`}
+                            </Typography>
+
+                            <Tooltip title={data?.assignedTo} placement="bottom">
+                            <Avatar className={classes.avatar} >
+                                {data?.assignedTo===""?"-":data?.assignedTo===null?"-":data?.assignedTo?.[0]?.toUpperCase()}
+                            </Avatar>
+                            </Tooltip>
+
+                            {data?.priority==="high"?<Tooltip title={data?.priority} placement="bottom">
+                                                    <ArrowDropUpIcon className={classes.priorityHigh}/>
+                                                    </Tooltip>:
+                            data?.priority==="low"?<Tooltip title={data?.priority} placement="bottom">
+                                                    <ArrowDropDownIcon className={classes.priorityLow}/>
+                                                    </Tooltip>:
+                            data?.priority==="medium"?<Tooltip title={data?.priority} placement="bottom">
+                                                    <DragHandleIcon className={classes.priorityMedium}/>
+                                                    </Tooltip>:
+                            <Typography className={classes.noPriority}>-</Typography>}
+
+                            <Typography className={classes.status} sx={{  backgroundColor:data?.status==="In-Progress"?"#b4dbff":
+                                        data?.status==="On-Hold"?"#ffe3cd":
+                                        data?.status==="To-Do"?"#d7d7d7":
+                                        data?.status==="Active"?"#d7d7d7":"#c4f4e5" }}>
+                                            {data?.status==="Active"?"To-Do":data?.status}
+                            </Typography>
+                            </Box>
+                            </Box>
+                            
+                            </Box>
+                            }>
+                                
+                             {data?.issues?.length!==0 &&
+                                data?.issues?.map((issue,ind)=>{
+                                    return <> <Divider />  <TreeItem nodeId={issue?.id} label={ 
+                                <>  
+                            <Box  className={classes.issue}>
+                            <Box style={{display:"flex",flexDirection:"row",justifyContent:"flex-end",alignItems:"center"}}>
+                            <DoneAllIcon  style={{color:"#45c4db",marginRight:"7px",}} />
+                            <Typography><a onClick={(e)=>{ e.stopPropagation();
+                                handleIssuedrawer(data?.issues[ind],iteration)}}
+                            style={{
+                            color: 'rgb(28, 117, 188)',
+                            textDecoration: 'none',
+                            }}>{capitalizeFirst(issue?.name)}</a>
+                            </Typography></Box>
+
+                            <Box style={{display:"flex",flexDirection:"row",justifyContent:"flex-end",alignItems:"center"}}>
+
+                            <Typography className={classes.estimate}>
+                                            {issue?.estimate===""?"-":issue?.estimate===null?"-":`${issue?.estimate}h`}
+                            </Typography>
+
+                            <Tooltip title={issue?.assignTo} placement="bottom">
+                            <Avatar className={classes.avatar} >
+                                {issue?.assignTo===""?"-":issue?.assignTo===null?"-":issue?.assignTo?.[0]?.toUpperCase()}
+                            </Avatar>
+                            </Tooltip>
+
+                            {issue?.priority==="high"?<Tooltip title={issue?.priority} placement="bottom">
+                                                    <ArrowDropUpIcon className={classes.priorityHigh}/>
+                                                    </Tooltip>:
+                            issue?.priority==="low"?<Tooltip title={issue?.priority} placement="bottom">
+                                                    <ArrowDropDownIcon className={classes.priorityLow}/>
+                                                    </Tooltip>:
+                            issue?.priority==="medium"?<Tooltip title={issue?.priority} placement="bottom">
+                                                    <DragHandleIcon className={classes.priorityMedium}/>
+                                                    </Tooltip>:
+                            <Typography className={classes.noPriority}>-</Typography>}
+
+                            <Typography className={classes.status} sx={{backgroundColor:issue?.status==="In-Progress"?"#b4dbff":
+                                        issue?.status==="On-Hold"?"#ffe3cd":
+                                        issue?.status==="To-Do"?"#d7d7d7":
+                                        issue?.status==="Active"?"#d7d7d7":"#c4f4e5" }}>
+                                            {issue?.status==="Active"?"To-Do":issue?.status}
+                            </Typography>
+                            </Box>
+                        </Box>
+                        {/* <Divider />  */}
+                        </>}/>
+                        </>})}
+                        </TreeItem>{provided.placeholder}</Box>)}</Draggable>})}
+                        <Divider/>
+                        {/* <Divider /> */}
+                </TreeView>:<Typography onClick={closedrawer} className={classes.noBacklog} 
+                                        // draggable={false} 
+                                         >
+                                    {provided.placeholder}
+                                    <p>No Flowitem to Show</p>
+                                </Typography>}
+                </div>  
+                </Grid>)}</Droppable>}):
+                // <Typography onClick={closedrawer} onDragOver={(e)=>{
+                //     e.preventDefault();
+                //     e.stopPropagation();
+                //     setIsDragging(false);
+                // }} onDrop={(e)=>{
+                //     e.preventDefault();
+                //     e.stopPropagation();
+                //     dropIteration(e,null,null)
+                // }}  className={classes.noBacklog}>
+                // <p>No Iterations to Show</p>
+                // </Typography>
+                ""}
+                
+                <Droppable droppableId="backlog">
+                {(provided) => (
+                <Box onClick={closedrawer} container style={{width: '100%',marginTop:"7px" }} 
+                        // onDragLeave={(e)=>{
+                        //    dragLeaveBacklog(e)
+                        // }}  onDragEnter={(e)=>{
+                        //    e.stopPropagation();
+                        //    dragOverBacklog(e);
+                        // }}  onDragOver={(e)=>{
+                        //     e.preventDefault();
+                        //     e.stopPropagation();
+                        //     dragOverBacklog(e);
+                        // }} onDrop={(e)=>{
+                        //     e.stopPropagation();
+                        //     dropBacklog(e,null,null)
+                        // }}
+                    {...provided.droppableProps} ref={provided.innerRef}>
+                    <Box style={{display:"flex",justifyContent:"space-between"}}>
+                    <Menu
+                         id="basic-menu"
+                         anchorEl={anchorEll}
+                         open={openAnchh}
+                         onClose={handleEditClose}
+                         MenuListProps={{
+                             'aria-labelledby': 'basic-button',
+                         }}
+                                    
+                         anchorOrigin={{
+                             vertical: 'bottom',
+                             top:"0",
+                             horizontal: 'right',
+                         }}
+                         transformOrigin={{
+                             vertical: 'top',
+                             horizontal: 'right',
+                         }}
+                     >
+                         <MenuItem onClick={()=>{
+                             setOpen(true);
+                             setFlowItem(true);
+                             setAnchorEll(null);
+                         }} >Flowitem</MenuItem>
+                         <Divider />
+                         <MenuItem onClick={()=>{
+                             setOpen(true);
+                             setIssue(true);
+                             setAnchorEll(null);
+                             setFlowitemIterationId(null)
+                         }} >Issue</MenuItem>
+                     </Menu>
+                <Typography sx={{ fontFamily: 'sans-serif', fontWeight: '900',fontSize:"17px" }}>
+                    Backlog</Typography>
+                    {tableData?.status!=="Completed"&&
+                    <Button variant="text" style={{color:'rgba(54, 64, 83, 1)',alignItems:"center",textAlign:"center",cursor:'pointer'}}
+                        
+                        onClick={(event)=>setAnchorEll(event.currentTarget)}>
+                     + Create
+                     
+                     </Button >}
+                     </Box>
+                     <Box 
+                    //  onDragLeave={(e)=>{
+                    //           dragLeaveBacklog(e)
+                    //       }}  onDragEnter={(e)=>{
+                    //           e.stopPropagation();
+                    //           dragOverBacklog(e);
+                    //       }}  onDragOver={(e)=>{
+                    //           e.preventDefault();
+                    //           e.stopPropagation();
+                    //           dragOverBacklog(e);
+                    //       }} onDrop={(e)=>{
+                    //           e.stopPropagation();
+                    //           dropBacklog(e,null,null)
+                    //       }}
+                          >
+                    { backlogData?.length!==0?
+                             <TreeView 
+                            aria-label="file system navigator"
+                            defaultCollapseIcon={<ExpandMoreIcon />}
+                            defaultExpandIcon={<ChevronRightIcon />}
+                            sx={{  maxWidth: "100%", overflowY: 'auto',overflowX: 'auto' }}
+                            onClick={(e)=>e.stopPropagation()}
+                            >
+                                
+                         {backlogData?.map((data,i)=>{
+                        return <Draggable key={data?.id} draggableId={data?.id} index={i}>
+                        {(provided) => (
+                        <Box 
+                        // draggable onDragStart={(e)=>{
+                            //   console.log(e,i,data,"dragstart")
+                        //     dragStartBacklog(e,i,data)
+                        // }} onDrop={(e)=>{
+                        //     e.stopPropagation();
+                        //     dropBacklog(e,i,data)
+                        // }} onDragLeave={(e)=>{
+                        //     e.stopPropagation();
+                        //     dragLeaveBacklog(e)
+                        // }} onDragEnter={(e)=>{
+                        //     e.stopPropagation();
+                        //     dragOverBacklog(e);
+                        // }} onDragEnd={(e)=>{
+                        //     e.stopPropagation();
+                        //     dragEndBacklog(e);
+                        // }}
+                        ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}
+                          style={{border: "thin solid #d7d7d7",borderBottom:"0",width:{xs:"800px",sm:"100%"}}}>  
+                        <TreeItem nodeId={data?.id} onClick={(e)=>{e.stopPropagation();
+                                                                closedrawer()}} className={classes.TreeView} 
+                        onFocusCapture={e => e.stopPropagation()} label={
+                            <>
+                        <Box onClick={(e)=>{e.stopPropagation();
+                                            closedrawer()}} style={{display:"flex",flexDirection:"row",alignItems:"center",
+                                                                            justifyContent:"space-between",
+                                                                        overflowX: 'auto'}} >
+                            <Box style={{display:"flex",flexDirection:"row",justifyContent:"flex-start",alignItems:"center"}}>
+                            <Checkbox defaultChecked style={{color:"rgba(54, 64, 83, 1)"}} size="small"/>
+                            <Typography><a onClick={(e)=>{e.stopPropagation();
+                                handleFlowItemBacklogdrawer(backlogData[i])}}
+                            style={{
+                            color: 'rgb(28, 117, 188)',
+                            textDecoration: 'none',
+                            }}>{capitalizeFirst(data?.name)}</a>
+                            </Typography>
+                            </Box>
+                            <Box style={{display:"flex",flexDirection:"row",justifyContent:"flex-end",alignItems:"center"}}>
+
+                            <Typography className={classes.estimate}>
+                                            {data?.estimate===""?"-":data?.estimate===null?"-":`${data?.estimate}h`}
+                            </Typography>
+
+                            <Tooltip title={data?.assignedTo} placement="bottom">
+                            <Avatar className={classes.avatar} >
+                                {data?.assignedTo===""?"-":data?.assignedTo===null?"-":data?.assignedTo?.[0]?.toUpperCase()}
+                            </Avatar>
+                            </Tooltip>
+
+                            {data?.priority==="high"?<Tooltip title={data?.priority} placement="bottom">
+                                                    <ArrowDropUpIcon className={classes.priorityHigh}/>
+                                                    </Tooltip>:
+                            data?.priority==="low"?<Tooltip title={data?.priority} placement="bottom">
+                                                    <ArrowDropDownIcon className={classes.priorityLow}/>
+                                                    </Tooltip>:
+                            data?.priority==="medium"?<Tooltip title={data?.priority} placement="bottom">
+                                                    <DragHandleIcon className={classes.priorityMedium}/>
+                                                    </Tooltip>:
+                            <Typography className={classes.noPriority}>-</Typography>}
+
+                            <Typography className={classes.status} sx={{ backgroundColor:data?.status==="In-Progress"?"#b4dbff":
+                                        data?.status==="On-Hold"?"#ffe3cd":
+                                        data?.status==="To-Do"?"#d7d7d7":
+                                        data?.status==="Active"?"#d7d7d7":"#c4f4e5" }}>
+                                            {data?.status==="Active"?"To-Do":data?.status}
+                            </Typography>
+
+                            </Box>
+                            </Box>
+                            {/* <Divider /> */}
+                            </>
+                            }>
+                                {data?.issues?.length!==0 &&
+                                data?.issues?.map((issue,ind)=>{
+                                    return <> <Divider/><TreeItem nodeId={issue.ind} key={issue.id} label={    
+                            <>
+                            
+                            <Box  className={classes.issue}>
+                            <Box style={{display:"flex",flexDirection:"row",justifyContent:"flex-end",alignItems:"center"}}>
+                            <DoneAllIcon  style={{color:"#45c4db",marginRight:"7px",}}/>
+                            <Typography><a onClick={(e)=>{ e.stopPropagation();
+                                            handleIssueBacklogdrawer(data?.issues[ind])}}
+                            style={{
+                            color: 'rgb(28, 117, 188)',
+                            textDecoration: 'none',
+                            }}>{capitalizeFirst(issue?.name)}</a>
+                            </Typography>
+                            </Box>
+
+                            <Box style={{display:"flex",flexDirection:"row",justifyContent:"flex-end",alignItems:"center"}}>
+
+                            <Typography className={classes.estimate}>
+                                            {issue?.estimate===""?"-":issue?.estimate===null?"-":`${issue?.estimate}h`}
+                            </Typography>
+
+                            <Tooltip title={issue?.assignTo} placement="bottom">
+                            <Avatar className={classes.avatar} >
+                                {issue?.assignTo===""?"-":issue?.assignTo===null?"-":issue?.assignTo?.[0]?.toUpperCase()}
+                            </Avatar>
+                            </Tooltip>
+
+                            {issue?.priority==="high"?<Tooltip title={issue?.priority} placement="bottom">
+                                                    <ArrowDropUpIcon className={classes.priorityHigh}/>
+                                                    </Tooltip>:
+                            issue?.priority==="low"?<Tooltip title={issue?.priority} placement="bottom">
+                                                    <ArrowDropDownIcon className={classes.priorityLow}/>
+                                                    </Tooltip>:
+                            issue?.priority==="medium"?<Tooltip title={issue?.priority} placement="bottom">
+                                                    <DragHandleIcon className={classes.priorityMedium}/>
+                                                    </Tooltip>:
+                            <Typography className={classes.noPriority}>-</Typography>}
+
+                            <Typography className={classes.status} sx={{ backgroundColor:issue?.status==="In-Progress"?"#b4dbff":
+                                        issue?.status==="On-Hold"?"#ffe3cd":
+                                        issue?.status==="To-Do"?"#d7d7d7":
+                                        issue?.status==="Active"?"#d7d7d7":"#c4f4e5"}}>
+                                            {issue?.status==="Active"?"To-Do":issue?.status}
+                            </Typography>
+                            </Box>
+
+                        </Box>
+                        {/* <Divider/> */}
+                        </>}/>
+                        </>})}
+                        </TreeItem>{provided.placeholder}</Box>)}</Draggable>})}
+                        {/* <Divider /> */}
+                        <Divider/>
+                </TreeView>:<Typography className={classes.noBacklog} 
+                                        // draggable={false} 
+                                        //  onDrop={(e)=>{
+                                        // e.preventDefault();
+                                        // e.stopPropagation();
+                                        // dropBacklog(e,null,null)
+                                        // }} 
+                                        >{provided.placeholder}
+                                    <p>No Backlogs found</p>
+                                </Typography>}
+                </Box></Box>)}</Droppable></DragDropContext></>}
+                
+                
+                {drawerModal && <BacklogDrawer flowitemModal={flowitemModal} issueModal={issueModal} closedrawer={closedrawer}
+                                    data={flowitemDataForDrawer} location={location} 
+                                    iteration={updateData} tableData={tableData} completeIssuePassingData={handleCompleteIssue}
+                                    completeFlowitemPassingData={handleCompleteFlowitem} deleteFlowitem={handleDeleteFlowitem}
+                                    deleteIssue={handleDeleteIssue} handleCreateFlowitem={handleCreateFlowitem} 
+                                    handleCreateIssues={handleCreateIssue} editFlowitem={handleEditFlowitem} 
+                                    editIssue={handleEditIssue}/>}
+                
+                {/* completeIteration Modal*/}
+                {CompleteIterationModal&&<Modal open
+                onClose={handleCloseCompleteIteration}
+                aria-labelledby="modal-modal-title"
+                aria-describedby="modal-modal-description">
+                    <Box sx={archiveStyle}>
+                        <Typography align="left" paddingBottom={2} sx={{ fontWeight: '900',fontSize:"19px",fontFamily: 'sans-serif' }}>
+                        Complete Iteration
+                        </Typography>
+                        <Grid item xs={12}>
+                            <Typography style={{fontWeight: 400,fontSize:"17px",fontFamily: 'sans-serif',}}>
+                            Are you sure you want to Complete this iteration?</Typography>
+                            <Typography style={{fontWeight: 400,fontSize:"12px",fontFamily: 'sans-serif',display:"flex",flexWrap:"wrap"}}>
+                            - Open features/issues within iterations will be removed from the iterations and moved to backlog</Typography>
+                            <Grid item sm={12} style={{ justifyContent: 'flex-end',display:"flex", flexDirection: 'row',paddingTop:"8px" }} >
+                                <Button  variant="contained" onClick={handleCloseCompleteIteration} disabled={submitLoad}
+                                            sx={{backgroundColor:"#f2f2f2",'&:hover': {backgroundColor:"rgb(219 219 219)"}}}
+                                            style={{ margin: 4,color:"black",border:"0",boxShadow:"none" }} >Cancel</Button>
+
+                                <Button variant="outlined"  
+                                        sx={{backgroundColor:"rgba(54, 64, 83, 1)",color:"white",'&:hover': {backgroundColor:"rgba(54, 64, 83, 1)"}}}
+                                        style={{ margin: 4,boxShadow:"none" }}  onClick={completeIteration}>Close</Button>
+
+                                    </Grid>
+                                </Grid>
+                                <Backdrop
+                                    sx={{ color: '#rgba(242, 242, 242, 1)', zIndex: (theme) => theme.zIndex.drawer + 1 }}
+                                    open={backDrop}
+                                >
+                            <CircularProgress color="inherit" />
+                        </Backdrop>
+                    </Box>
+                </Modal>}
+                
+                {open&&<CreateOrEditIssueOrFlowitemModal createFlowitem={flowItem} createIssue={issue}
+                 iterationId={flowitemIterationId} location={location} 
+                handleClose={handleClose} cancelClose={cancelClose} updateData={null} handleCreateIssue={handleCreateIssue}
+                handleCreateFlowitem={handleCreateFlowitem} getAllData={getAllData}/>}
+                
+        </div>
+    )
+}
+
+const useStyles = makeStyles((theme) => ({
+    container: {
+        backgroundColor: '#ffffff',
+        height: '100vh',
+        display: 'grid',
+        placeItems: 'center',
+    },
+    TreeView:{
+        [theme.breakpoints.down("xs")]:{
+            width:"800px",
+            overflow:"auto"
+        },
+        
+    },
+    circularProgress:{
+        color: '#364053 !important',
+        justifyContent:"center !important" ,
+        alignItems:"center !important",
+        textAlign:"center !important",
+        marginTop:"60px !important"
+    },
+    issue:{
+        display:"flex !important",
+        flexDirection:"row !important",
+        alignItems:"center !important",
+        justifyContent:"space-between !important",
+        height:"38px !important",
+        overflowX: 'auto !important',
+        marginTop:"4px !important"
+    },
+    noPriority:{
+        justifyContent:"center !important",
+        alignItems:"center !important",
+        textAlign:"center !important",
+        width:"30px !important",
+        marginRight:"7px !important"
+    },
+    noBacklog:{
+        width: '73vw !important',
+        justifyContent: 'center !important',
+        alignItems: 'center !important',
+        textAlign:"center !important"
+    },
+    date:{
+        fontFamily: 'sans-serif !important',
+         fontWeight: '300 !important',
+         fontSize:"11px !important",
+         display:"flex !important",
+         flexWrap:"wrap !important",
+         marginBottom:"7px !important"
+    },
+    noEstimate:{
+        justifyContent:"center !important",
+        alignItems:"center !important",
+        textAlign:"center !important",
+        marginRight:"7px !important",
+        width:"40px !important"
+    },
+    avatar:{
+        height:"26px !important",
+        width:"26px !important",
+        justifyContent:"center !important",
+        alignItems:"center !important",
+        textAlign:"center !important",
+        marginRight:"7px !important",
+        backgroundColor:"#3cb990 !important"
+    },
+    status:{
+        borderRadius:"5px !important",
+        justifyContent:"center !important",
+        alignItems:"center !important",
+        textAlign:"center !important",
+        marginRight:"7px !important",
+        padding:"1px !important",
+        width:"90px !important",
+        fontFamily: 'sans-serif !important', 
+        fontWeight: '500 !important',
+        fontSize:"14px !important",
+    },
+    estimate:{
+        fontFamily: 'sans-serif !important',
+        fontWeight: '500 !important',
+        fontSize:"17px !important",
+        backgroundColor:"#d7d7d7 !important"
+        ,borderRadius:"5px !important",
+        padding:"0px !important",
+        width:"40px !important",
+        justifyContent:"center !important",
+        alignItems:"center !important",
+        textAlign:"center !important",
+        marginRight:"7px !important",
+    },
+    iterationName:{
+        fontFamily: 'sans-serif !important', 
+        fontWeight: '900 !important',
+        fontSize:"17px !important",
+        marginBottom:"7px !important"
+    },
+    loading:{
+        width:"95vw !important",
+        justifyContent:"center !important",
+        alignItems:"center !important",
+        textAlign:"center !important"
+    },
+    priorityHigh:{
+        color:"#f15a29 !important",
+        fontSize:"30px !important",
+        marginRight:"7px !important",
+        width:"30px !important"
+    },
+    priorityLow:{
+        color:"#1c75bc !important",
+        fontSize:"30px !important",
+        marginRight:"7px !important",
+        width:"30px !important"
+    },
+    priorityMedium:{
+        color:"#aaaaaa !important",
+        fontSize:"30px !important",
+        marginRight:"7px !important",
+        width:"30px !important"
+    },
+    span: {
+        color: 'red',
+        fontSize: '14px',
+    },
+    textField: {
+        width: '100% !important',
+        fontFamily: 'sans-serif !important',
+    },
+    assignedTo:{
+        justifyContent:"center !important",
+        alignItems:"center !important",
+        textAlign:"center !important",
+        width:"27px !important",
+        marginRight:"7px !important"
+    },
+    error: {
+        textAlign: 'left !important',
+        color: 'red !important',
+        fontSize: '13px !important',
+        fontFamily: 'sans-serif !important',
+        marginLeft: '2px !important',
+        marginTop: '2px !important',
+    },
+    button:{
+        [theme.breakpoints.down("sm")]:{
+            padding:"0"
+        },
+        fontFamily: 'sans-serif !important', 
+        color:'rgba(242, 242, 242, 1) !important',
+        backgroundColor:'rgba(54, 64, 83, 1) !important',
+        paddingLeft:"30px !important",
+        paddingRight:"30px !important",
+        ':hover': { backgroundColor: 'rgba(54, 64, 83, 1) !important' },
+        border:"0 !important",
+        marginRight:"15px !important",
+        alignItems:"center !important"
+    },
+    searchField:{
+        color:"black",
+        border:"black",
+        backgroundColor:"#f2f2f2",
+        borderRadius:"5px",
+        fontFamily: 'sans-serif !important',
+        fontSize: '15px !important',
+        [theme.breakpoints.down("xs")]:{
+            "& .css-ldoa2p-MuiFormControl-root-MuiTextField-root": {
+                width:"100px",
+                paddingLeft:"-15px"
+             },
+        }
+    },
+    notchedOutline: {
+        borderWidth: '2px !important',
+        borderColor: '#7c7c7c !important',
+        color: '#333333 !important',
+    },
+    floatingLabelFocusStyle: {
+        color: '#333333 !important',
+    },
+    notificationSuccess: {
+        boxShadow:
+            '0px 2px 1px -1px rgba(0,0,0,0.2),0px 1px 1px 0px rgba(0,0,0,0.14),0px 1px 3px 0px rgba(0,0,0,0.12) !important',
+        color: 'green !important',
+    },
+
+    notificationError: {
+        boxShadow:
+            '0px 2px 1px -1px rgba(0,0,0,0.2),0px 1px 1px 0px rgba(0,0,0,0.14),0px 1px 3px 0px rgba(0,0,0,0.12) !important',
+        color: 'red !important',
+    },
+    iterationDescription:{
+        fontFamily: 'sans-serif !important', 
+        fontWeight: '300 !important',
+        fontSize:"10px !important",
+        display:"flex !important",
+        flexWrap:"wrap !important",
+        marginBottom:"7px !important"
+    }
+}));
+
+const archiveStyle = {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    width:{xs:350,sm:500},
+    bgcolor: 'background.paper',
+    borderRadius:"4px",
+    // border: '2px solid #000',
+    boxShadow: 24,
+    padding:"16px"
+};
+
+export default  Backlog;
+
